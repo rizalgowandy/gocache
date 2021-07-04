@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	redis "github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v8"
 )
 
 // RedisClientInterface represents a go-redis/redis client

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	redis "github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v8"
 )
 
 // RedisClusterClientInterface represents a go-redis/redis clusclient
@@ -118,11 +118,6 @@ func (s *RedisClusterStore) Invalidate(ctx context.Context, options InvalidateOp
 	return nil
 }
 
-// GetType returns the store type
-func (s *RedisClusterStore) GetType() string {
-	return RedisClusterType
-}
-
 // Clear resets all data in the store
 func (s *RedisClusterStore) Clear(ctx context.Context) error {
 	if err := s.clusclient.FlushAll(ctx).Err(); err != nil {
@@ -130,4 +125,9 @@ func (s *RedisClusterStore) Clear(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetType returns the store type
+func (s *RedisClusterStore) GetType() string {
+	return RedisClusterType
 }

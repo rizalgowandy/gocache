@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/XiaoMi/pegasus-go-client/admin"
 	"github.com/XiaoMi/pegasus-go-client/pegasus"
 	"github.com/spf13/cast"
-	"strings"
-	"time"
 )
 
 const (
@@ -113,6 +114,10 @@ func createTable(ctx context.Context, options *OptionsPegasus) error {
 
 // dropTable for drop table
 func dropTable(ctx context.Context, options *OptionsPegasus) error {
+	if err := validateOptions(options); err != nil {
+		return err
+	}
+
 	tableClient := admin.NewClient(admin.Config{MetaServers: options.MetaServers})
 	return tableClient.DropTable(ctx, options.TableName)
 }
