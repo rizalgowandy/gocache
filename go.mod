@@ -15,7 +15,7 @@ require (
 	github.com/smartystreets/assertions v1.2.1
 	github.com/smartystreets/goconvey v1.7.2
 	github.com/spf13/cast v1.4.1
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.4
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
@@ -46,6 +46,6 @@ require (
 	google.golang.org/protobuf v1.26.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apimachinery v0.0.0-20191123233150-4c4803ed55e3 // indirect
 )
