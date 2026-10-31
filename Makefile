@@ -1,18 +1,54 @@
-.PHONY: mocks test benchmark-store
+.PHONY: update-stores-version mocks test benchmark-store store-latest-versions store-increment-patch-version
+
+# Usage: VERSION=v4.1.3 make update-stores-version
+update-stores-version:
+	ls store/ | xargs -I % bash -c "sed -i '' -E 's,github.com/eko/gocache/lib/v4 v[0-9]\.[0-9]\.[0-9],github.com/eko/gocache/lib/v4 ${VERSION},g' store/%/go.mod"
+
+store-latest-versions:
+	git tag \
+	| grep '^store/' \
+	| sort -t/ -k3 -Vr \
+	| awk -F/ '!seen[$$2]++'
+
+store-increment-patch-version:
+	@ls store/ | while read -r name; do \
+		version=$$(git tag | grep "^store/$$name/v" | sort -t/ -k3 -V | tail -n1); \
+		if [ -z "$$version" ]; then \
+			echo "Skipping store/$$name: no version tagged yet, tag the first one manually"; \
+			continue; \
+		fi; \
+		patch=$$(echo "$$version" | awk -F. '{print $$NF}'); \
+		new="$$(echo "$$version" | sed -E 's/\.[0-9]+$$//').$$((patch+1))"; \
+		echo "Tagging $$new"; \
+		git tag "$$new"; \
+	done
 
 mocks:
-	mockgen -source=cache/interface.go -destination=test/mocks/cache/cache_interface.go -package=mocks
-	mockgen -source=codec/interface.go -destination=test/mocks/codec/codec_interface.go -package=mocks
-	mockgen -source=metrics/interface.go -destination=test/mocks/metrics/metrics_interface.go -package=mocks
-	mockgen -source=store/interface.go -destination=test/mocks/store/store_interface.go -package=mocks
-	mockgen -source=store/bigcache.go -destination=test/mocks/store/clients/bigcache_interface.go -package=mocks
-	mockgen -source=store/memcache.go -destination=test/mocks/store/clients/memcache_interface.go -package=mocks
-	mockgen -source=store/redis.go -destination=test/mocks/store/clients/redis_interface.go -package=mocks
-	mockgen -source=store/rediscluster.go -destination=test/mocks/store/clients/rediscluster_interface.go -package=mocks
-	mockgen -source=store/ristretto.go -destination=test/mocks/store/clients/ristretto_interface.go -package=mocks
-	mockgen -source=store/freecache.go -destination=test/mocks/store/clients/freecache_interface.go -package=mocks
-	mockgen -source=store/go_cache.go -destination=test/mocks/store/clients/go_cache_interface.go -package=mocks
+	mockgen -source=lib/cache/interface.go -destination=lib/mocks/cache/cache_mock.go -package=cache
+	mockgen -source=lib/codec/interface.go -destination=lib/mocks/codec/codec_mock.go -package=codec
+	mockgen -source=lib/metrics/interface.go -destination=lib/mocks/metrics/metrics_mock.go -package=metrics
+	mockgen -source=lib/store/interface.go -destination=lib/mocks/store/store_mock.go -package=store
+
+	mockgen -source=store/bigcache/bigcache.go -destination=store/bigcache/bigcache_mock_test.go -package=bigcache
+	mockgen -source=store/redis/redis.go -destination=store/redis/redis_mock_test.go -package=redis
+	mockgen -source=store/rediscluster/rediscluster.go -destination=store/rediscluster/rediscluster_mock_test.go -package=rediscluster
+	mockgen -source=store/freecache/freecache.go -destination=store/freecache/freecache_mock_test.go -package=freecache
+	mockgen -source=store/go_cache/go_cache.go -destination=store/go_cache/go_cache_mock_test.go -package=go_cache
+	mockgen -source=store/hazelcast/hazelcast.go -destination=store/hazelcast/hazelcast_mock_test.go -package=hazelcast
+	mockgen -source=store/nats/nats.go -destination=store/nats/nats_mock_test.go -package=nats
+	cd store/nats && mockgen -destination=nats_interfaces_mock_test.go -package=nats github.com/nats-io/nats.go/jetstream KeyValueEntry,KeyValueStatus,KeyLister
+
 test:
-	GOGC=10 go test -p=4 ./...
-benchmark-store:
-	cd store && go test -bench=. -benchmem -benchtime=1s  -count=1 -run=none
+	cd lib; GOGC=10 go test -v -p=4 ./...
+	cd store/bigcache; GOGC=10 go test -v -p=4 ./...
+	cd store/freecache; GOGC=10 go test -v -p=4 ./...
+	cd store/go_cache; GOGC=10 go test -v -p=4 ./...
+	cd store/hazelcast; GOGC=10 go test -v -p=4 ./...
+	cd store/memcache; GOGC=10 go test -v -p=4 ./...
+	cd store/nats; GOGC=10 go test -v -p=4 ./...
+	cd store/pegasus; GOGC=10 go test -v -p=4 ./...
+	cd store/redis; GOGC=10 go test -v -p=4 ./...
+	cd store/rediscluster; GOGC=10 go test -v -p=4 ./...
+	cd store/ristretto; GOGC=10 go test -v -p=4 ./...
+	cd store/rueidis; GOGC=10 go test -v -p=4 ./...
+	cd store/valkey; GOGC=10 go test -v -p=4 ./...

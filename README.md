@@ -1,10 +1,9 @@
 [![Test](https://github.com/eko/gocache/actions/workflows/all.yml/badge.svg?branch=master)](https://github.com/eko/gocache/actions/workflows/all.yml)
-[![GoDoc](https://godoc.org/github.com/eko/gocache?status.png)](https://godoc.org/github.com/eko/gocache)
+[![GoDoc](https://godoc.org/github.com/eko/gocache?status.png)](https://pkg.go.dev/github.com/eko/gocache/lib/v4)
 [![GoReportCard](https://goreportcard.com/badge/github.com/eko/gocache)](https://goreportcard.com/report/github.com/eko/gocache)
 [![codecov](https://codecov.io/gh/eko/gocache/branch/master/graph/badge.svg)](https://codecov.io/gh/eko/gocache)
 
-Gocache
-=======
+# Gocache
 
 Guess what is Gocache? a Go cache library.
 This is an extendable cache library that brings you a lot of features for caching data.
@@ -13,28 +12,106 @@ This is an extendable cache library that brings you a lot of features for cachin
 
 Here is what it brings in detail:
 
-* ✅ Multiple cache stores: actually in memory, redis, or your own custom store
-* ✅ A chain cache: use multiple cache with a priority order (memory then fallback to a redis shared cache for instance)
-* ✅ A loadable cache: allow you to call a callback function to put your data back in cache
-* ✅ A metric cache to let you store metrics about your caches usage (hits, miss, set success, set error, ...)
-* ✅ A marshaler to automatically marshal/unmarshal your cache values as a struct
-* ✅ Define default values in stores and override them when setting data
-* ✅ Cache invalidation by expiration time and/or using tags
+- ✅ Multiple cache stores: actually in memory, redis, or your own custom store
+- ✅ A chain cache: use multiple cache with a priority order (memory then fallback to a redis shared cache for instance)
+- ✅ A loadable cache: allow you to call a callback function to put your data back in cache
+- ✅ A metric cache to let you store metrics about your caches usage (hits, miss, set success, set error, ...)
+- ✅ A marshaler to automatically marshal/unmarshal your cache values as a struct
+- ✅ Define default values in stores and override them when setting data
+- ✅ Cache invalidation by expiration time and/or using tags
+- ✅ Use of Generics
 
 ## Built-in stores
 
-* [Memory (bigcache)](https://github.com/allegro/bigcache) (allegro/bigcache)
-* [Memory (ristretto)](https://github.com/dgraph-io/ristretto) (dgraph-io/ristretto)
-* [Memory (go-cache)](https://github.com/patrickmn/go-cache) (patrickmn/go-cache)
-* [Memcache](https://github.com/bradfitz/gomemcache) (bradfitz/memcache)
-* [Redis](https://github.com/go-redis/redis/v8) (go-redis/redis)
-* [Freecache](https://github.com/coocood/freecache) (coocood/freecache)
-* [Pegasus](https://pegasus.apache.org/) ([apache/incubator-pegasus](https://github.com/apache/incubator-pegasus)) [benchmark](https://pegasus.apache.org/overview/benchmark/)
-* More to come soon
+- [Memory (bigcache)](https://github.com/allegro/bigcache) (allegro/bigcache)
+- [Memory (ristretto)](https://github.com/dgraph-io/ristretto) (dgraph-io/ristretto)
+- [Memory (go-cache)](https://github.com/patrickmn/go-cache) (patrickmn/go-cache)
+- [Memcache](https://github.com/bradfitz/gomemcache) (bradfitz/memcache)
+- [NATS JetStream KV](https://docs.nats.io/nats-concepts/jetstream/key-value-store) (nats-io/nats.go)
+- [Redis](https://github.com/go-redis/redis) (go-redis/redis)
+- [Redis (rueidis)](https://github.com/redis/rueidis) (redis/rueidis)
+- [Valkey](https://github.com/valkey-io/valkey-go) (valkey-io/valkey-go)
+- [Freecache](https://github.com/coocood/freecache) (coocood/freecache)
+- [Pegasus](https://pegasus.apache.org/) ([apache/incubator-pegasus](https://github.com/apache/incubator-pegasus)) [benchmark](https://pegasus.apache.org/overview/benchmark/) — **deprecated**, see below
+- [Hazelcast](https://github.com/hazelcast/hazelcast-go-client) (hazelcast-go-client/hazelcast)
+- More to come soon
+
+### What each store supports
+
+Stores do not all accept the same value types, and not all of them provide every operation. Keys are always
+strings (Ristretto excepted, where the key type is a generic parameter).
+
+| Store         | Values accepted by `Set()`               | Values returned by `Get()` | Per-key expiration | Tags | `SetIfNotExists()` |
+|---------------|------------------------------------------|----------------------------|--------------------|------|--------------------|
+| Bigcache      | `string`, `[]byte`                       | `[]byte`                   | no, client-wide    | yes  | no                 |
+| Freecache     | `[]byte`                                 | `[]byte`                   | yes                | yes  | no                 |
+| Go-cache      | any                                      | as stored                  | yes                | yes  | yes                |
+| Hazelcast     | any serializable by the client           | as stored                  | yes                | yes  | no                 |
+| Memcache      | `[]byte`                                 | `[]byte`                   | yes                | yes  | yes                |
+| NATS KV       | `string`, `[]byte`                       | `[]byte`                   | on create only     | no   | yes                |
+| Pegasus       | anything `cast.ToString` handles         | `[]byte`                   | yes                | yes  | no                 |
+| Redis         | anything go-redis can marshal            | `string`                   | yes                | yes  | yes                |
+| Redis cluster | anything go-redis can marshal            | `string`                   | yes                | yes  | yes                |
+| Ristretto     | the store value type `V`                 | `V`                        | yes                | yes¹ | no                 |
+| Rueidis       | `string`, `[]byte`                       | `string`                   | yes                | yes  | no                 |
+| Valkey        | `string`, `[]byte`                       | `string`                   | yes                | yes  | no                 |
+
+¹ Ristretto tags need string keys and a value type able to hold the tag list (`string`, `[]byte` or `any`).
+
+Memcached does not expose the remaining TTL of an item, so `GetWithTTL()` on the Memcache store returns the
+store default expiration. In a chain, set one with `store.WithExpiration()` on `NewMemcache()`: copies in the
+upper stores use it, and without it they never expire.
+
+`cache.Cache` converts between `string` and `[]byte` for you, so `cache.New[string](bigcacheStore)` and
+`cache.New[[]byte](redisStore)` both work. To store anything else in a store that only handles bytes, use the
+[marshaler wrapper](#a-marshaler-wrapper).
+
+Two more things worth knowing:
+
+* Bigcache has no per-key TTL, so `GetWithTTL()` reports a fixed 5 minutes in order to stay usable in a `Chain` cache,
+* Ristretto is allowed to drop a `Set()` when its buffers are full — this is by design in
+  [its FAQ](https://github.com/dgraph-io/ristretto#faq) — in which case `Set()` returns an error. Use
+  `store.WithSynchronousSet()` if you need the write to be visible right after the call.
 
 ## Built-in metrics providers
 
-* [Prometheus](https://github.com/prometheus/client_golang)
+- [Prometheus](https://github.com/prometheus/client_golang)
+
+## Installation
+
+To begin working with the latest version of gocache, you can import the library in your project:
+
+```go
+go get github.com/eko/gocache/lib/v4
+```
+
+and then, import the store(s) you want to use between all available ones:
+
+```go
+go get github.com/eko/gocache/store/bigcache/v4
+go get github.com/eko/gocache/store/freecache/v4
+go get github.com/eko/gocache/store/go_cache/v4
+go get github.com/eko/gocache/store/hazelcast/v4
+go get github.com/eko/gocache/store/memcache/v4
+go get github.com/eko/gocache/store/nats/v4
+go get github.com/eko/gocache/store/pegasus/v4
+go get github.com/eko/gocache/store/redis/v4
+go get github.com/eko/gocache/store/rediscluster/v4
+go get github.com/eko/gocache/store/rueidis/v4
+go get github.com/eko/gocache/store/ristretto/v4
+go get github.com/eko/gocache/store/valkey/v4
+```
+
+Then, simply use the following import statements:
+
+```go
+import (
+	"github.com/eko/gocache/lib/v4/cache"
+	"github.com/eko/gocache/store/redis/v4"
+)
+```
+
+If you run into any errors, please be sure to run `go mod tidy` to clean your go.mod file.
 
 ## Available cache features in detail
 
@@ -45,17 +122,15 @@ Here is a simple cache instantiation with Redis but you can also look at other a
 #### Memcache
 
 ```go
-memcacheStore := store.NewMemcache(
+memcacheStore := memcache_store.NewMemcache(
 	memcache.New("10.0.0.1:11211", "10.0.0.2:11211", "10.0.0.3:11212"),
-	&store.Options{
-		Expiration: 10*time.Second,
-	},
+	store.WithExpiration(10*time.Second),
 )
 
-cacheManager := cache.New(memcacheStore)
-err := cacheManager.Set(ctx, "my-key", []byte("my-value"), &store.Options{
-	Expiration: 15*time.Second, // Override default value of 10 seconds defined in the store
-})
+cacheManager := cache.New[[]byte](memcacheStore)
+err := cacheManager.Set(ctx, "my-key", []byte("my-value"),
+	store.WithExpiration(15*time.Second), // Override default value of 10 seconds defined in the store
+)
 if err != nil {
     panic(err)
 }
@@ -71,10 +146,10 @@ cacheManager.Clear(ctx) // Clears the entire cache, in case you want to flush al
 
 ```go
 bigcacheClient, _ := bigcache.NewBigCache(bigcache.DefaultConfig(5 * time.Minute))
-bigcacheStore := store.NewBigcache(bigcacheClient, nil) // No options provided (as second argument)
+bigcacheStore := bigcache_store.NewBigcache(bigcacheClient)
 
-cacheManager := cache.New(bigcacheStore)
-err := cacheManager.Set(ctx, "my-key", []byte("my-value"), nil)
+cacheManager := cache.New[[]byte](bigcacheStore)
+err := cacheManager.Set(ctx, "my-key", []byte("my-value"))
 if err != nil {
     panic(err)
 }
@@ -85,7 +160,13 @@ value := cacheManager.Get(ctx, "my-key")
 #### Memory (using Ristretto)
 
 ```go
-ristrettoCache, err := ristretto.NewCache(&ristretto.Config{
+import (
+	"github.com/dgraph-io/ristretto/v2"
+	"github.com/eko/gocache/lib/v4/cache"
+	"github.com/eko/gocache/lib/v4/store"
+	ristretto_store "github.com/eko/gocache/store/ristretto/v4"
+)
+ristrettoCache, err := ristretto.NewCache(&ristretto.Config[string, string]{
 	NumCounters: 1000,
 	MaxCost: 100,
 	BufferItems: 64,
@@ -93,10 +174,14 @@ ristrettoCache, err := ristretto.NewCache(&ristretto.Config{
 if err != nil {
     panic(err)
 }
-ristrettoStore := store.NewRistretto(ristrettoCache, nil)
+ristrettoStore := ristretto_store.NewRistretto(ristrettoCache)
 
-cacheManager := cache.New(ristrettoStore)
-err := cacheManager.Set(ctx, "my-key", "my-value", &store.Options{Cost: 2})
+cacheManager := cache.New[string](ristrettoStore)
+
+// Ristretto owns goroutines that live until the cache is closed
+defer cacheManager.Close()
+
+err := cacheManager.Set(ctx, "my-key", "my-value", store.WithCost(2))
 if err != nil {
     panic(err)
 }
@@ -106,14 +191,16 @@ value := cacheManager.Get(ctx, "my-key")
 cacheManager.Delete(ctx, "my-key")
 ```
 
+Note that since `store/ristretto/v4.3.1`, this store is built on top of `github.com/dgraph-io/ristretto/v2`, whose `NewCache` takes the key and value types as generic parameters. Upgrading requires updating both the import path and the `ristretto.Config` instantiation.
+
 #### Memory (using Go-cache)
 
 ```go
 gocacheClient := gocache.New(5*time.Minute, 10*time.Minute)
-gocacheStore := store.NewGoCache(gocacheClient, nil)
+gocacheStore := gocache_store.NewGoCache(gocacheClient)
 
-cacheManager := cache.New(gocacheStore)
-err := cacheManager.Set(ctx, "my-key", []byte("my-value"), nil)
+cacheManager := cache.New[[]byte](gocacheStore)
+err := cacheManager.Set(ctx, "my-key", []byte("my-value"))
 if err != nil {
 	panic(err)
 }
@@ -128,12 +215,12 @@ fmt.Printf("%s", value)
 #### Redis
 
 ```go
-redisStore := store.NewRedis(redis.NewClient(&redis.Options{
+redisStore := redis_store.NewRedis(redis.NewClient(&redis.Options{
 	Addr: "127.0.0.1:6379",
-}), nil)
+}))
 
-cacheManager := cache.New(redisStore)
-err := cacheManager.Set("my-key", "my-value", &store.Options{Expiration: 15*time.Second})
+cacheManager := cache.New[string](redisStore)
+err := cacheManager.Set(ctx, "my-key", "my-value", store.WithExpiration(15*time.Second))
 if err != nil {
     panic(err)
 }
@@ -149,14 +236,74 @@ switch err {
 }
 ```
 
+`NewRedis()` takes any client satisfying its `RedisClientInterface`, which `redis.UniversalClient` does: the
+same store works against a single node, a Sentinel setup or a cluster, without changing anything but the
+client options.
+
+```go
+redisStore := redis_store.NewRedis(redis.NewUniversalClient(&redis.UniversalOptions{
+	Addrs: []string{"127.0.0.1:6379", "127.0.0.1:6380"},
+}))
+```
+
+#### [Redis Client-Side Caching](https://redis.io/docs/manual/client-side-caching/) (using rueidis)
+
+```go
+client, err := rueidis.NewClient(rueidis.ClientOption{InitAddress: []string{"127.0.0.1:6379"}})
+if err != nil {
+    panic(err)
+}
+
+cacheManager := cache.New[string](rueidis_store.NewRueidis(
+    client,
+    store.WithExpiration(15*time.Second),
+    store.WithClientSideCaching(15*time.Second)),
+)
+
+if err = cacheManager.Set(ctx, "my-key", "my-value"); err != nil {
+    panic(err)
+}
+
+value, err := cacheManager.Get(ctx, "my-key")
+if err != nil {
+    log.Fatalf("Failed to get the value from the redis cache with key '%s': %v", "my-key", err)
+}
+log.Printf("Get the key '%s' from the redis cache. Result: %s", "my-key", value)
+```
+
+#### Valkey
+
+```go
+client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{"127.0.0.1:6379"}})
+if err != nil {
+    panic(err)
+}
+
+cacheManager := cache.New[string](valkey_store.NewValkey(
+    client,
+    store.WithExpiration(15*time.Second),
+    store.WithClientSideCaching(15*time.Second)),
+)
+
+if err = cacheManager.Set(ctx, "my-key", "my-value"); err != nil {
+    panic(err)
+}
+
+value, err := cacheManager.Get(ctx, "my-key")
+if err != nil {
+    log.Fatalf("Failed to get the value from the valkey cache with key '%s': %v", "my-key", err)
+}
+log.Printf("Get the key '%s' from the valkey cache. Result: %s", "my-key", value)
+```
+
+Client-side caching is enabled by default with a 10 seconds expiration, use `store.WithClientSideCaching()` to change it.
+
 #### Freecache
 
 ```go
-freecacheStore := store.NewFreecache(freecache.NewCache(1000), &Options{
-	Expiration: 10 * time.Second,
-})
+freecacheStore := freecache_store.NewFreecache(freecache.NewCache(1000), store.WithExpiration(10 * time.Second))
 
-cacheManager := cache.New(freecacheStore)
+cacheManager := cache.New[[]byte](freecacheStore)
 err := cacheManager.Set(ctx, "by-key", []byte("my-value"), opts)
 if err != nil {
     panic(err)
@@ -167,8 +314,16 @@ value := cacheManager.Get(ctx, "my-key")
 
 #### Pegasus
 
+> [!WARNING]
+> **This store is deprecated and will be removed in the next major version.** It is built on
+> [XiaoMi/pegasus-go-client](https://github.com/XiaoMi/pegasus-go-client), which has been archived upstream
+> since May 2022 and pulls in unmaintained dependencies. Migrating to
+> [apache/incubator-pegasus](https://github.com/apache/incubator-pegasus) is blocked: that module has no
+> tagged release and its admin API has changed. It keeps working and existing versions stay available, but it
+> is no longer developed — see [#221](https://github.com/eko/gocache/issues/221) if you want to take it over.
+
 ```go
-pegasusStore, err := store.NewPegasus(&store.OptionsPegasus{
+pegasusStore, err := pegasus_store.NewPegasus(ctx, &pegasus_store.OptionsPegasus{
     MetaServers: []string{"127.0.0.1:34601", "127.0.0.1:34602", "127.0.0.1:34603"},
 })
 
@@ -177,15 +332,105 @@ if err != nil {
     return
 }
 
-cacheManager := cache.New(pegasusStore)
-err = cacheManager.Set(ctx, "my-key", "my-value", &store.Options{
-    Expiration: 10 * time.Second,
-})
+cacheManager := cache.New[string](pegasusStore)
+err = cacheManager.Set(ctx, "my-key", "my-value", store.WithExpiration(10 * time.Second))
 if err != nil {
     panic(err)
 }
 
 value, _ := cacheManager.Get(ctx, "my-key")
+```
+
+#### Hazelcast
+
+```go
+hzClient, err := hazelcast.StartNewClient(ctx)
+if err != nil {
+    log.Fatalf("Failed to start client: %v", err)
+}
+
+hzMap, err := hzClient.GetMap(ctx, "gocache")
+if err != nil {
+    b.Fatalf("Failed to get map: %v", err)
+}
+
+hazelcastStore := hazelcast_store.NewHazelcast(hzMap)
+
+cacheManager := cache.New[string](hazelcastStore)
+err := cacheManager.Set(ctx, "my-key", "my-value", store.WithExpiration(15*time.Second))
+if err != nil {
+    panic(err)
+}
+
+value, err := cacheManager.Get(ctx, "my-key")
+if err != nil {
+    panic(err)
+}
+fmt.Printf("Get the key '%s' from the hazelcast cache. Result: %s", "my-key", value)
+```
+
+#### NATS
+
+Create a JetStream key-value bucket and pass it to `NewNats`:
+
+```go
+import (
+    "context"
+    "time"
+
+    "github.com/eko/gocache/lib/v4/store"
+    nats_store "github.com/eko/gocache/store/nats/v4"
+    "github.com/nats-io/nats.go"
+    "github.com/nats-io/nats.go/jetstream"
+)
+
+func example() error {
+    nc, err := nats.Connect(nats.DefaultURL)
+    if err != nil { return err }
+    defer nc.Close()
+    js, err := jetstream.New(nc)
+    if err != nil { return err }
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+        Bucket: "cache",
+        TTL: 5*time.Minute,
+        LimitMarkerTTL: 10*time.Second,
+    })
+    if err != nil { return err }
+    cacheStore := nats_store.NewNats(kv)
+    if err := cacheStore.Set(ctx, "key", "value"); err != nil { return err }
+    acquired, err := cacheStore.SetIfNotExists(ctx, "lock", "owner", store.WithExpiration(30*time.Second))
+    if err != nil { return err }
+    if !acquired {
+        // Another owner already holds the lock.
+    }
+    return nil
+}
+```
+
+`Set` uses the bucket TTL: per-key expiration options are accepted but ignored,
+so the store keeps working behind a `ChainCache`. `SetIfNotExists`
+uses atomic `Create` and supports positive per-key expiration through `KeyTTL`,
+requiring NATS Server 2.11+ and a bucket with `LimitMarkerTTL` enabled. Negative
+expiration is rejected; zero leaves expiration to the bucket. Constructor options
+are defaults, overridden by per-call options. Tagged writes are rejected;
+`Invalidate` is a no-op, consistent with stores without tag support.
+
+`GetWithTTL` reports remaining **bucket** TTL, not a per-key `Create` TTL (which the
+KeyValue entry API does not expose). Do not use it to extend an expiring lock in
+another cache. Bucket configuration is cached after the first successful read;
+recreate the store after changing that configuration. `Clear` streams keys using
+`ListKeys`, avoiding materializing the entire key list.
+
+The NATS module needs its initial `store/nats/v4.x.y` release tag before its
+`go get` command is available. For integration tests and benchmarks, run a local
+JetStream server and set `NATS_TEST_URL`:
+
+```sh
+cd store/nats
+NATS_TEST_URL=nats://127.0.0.1:4222 go test -race ./...
+NATS_TEST_URL=nats://127.0.0.1:4222 go test -run '^$' -bench . -benchmem
 ```
 
 ### A chained cache
@@ -194,7 +439,11 @@ Here, we will chain caches in the following order: first in memory with Ristrett
 
 ```go
 // Initialize Ristretto cache and Redis client
-ristrettoCache, err := ristretto.NewCache(&ristretto.Config{NumCounters: 1000, MaxCost: 100, BufferItems: 64})
+ristrettoCache, err := ristretto.NewCache(&ristretto.Config[string, any]{
+    NumCounters: 1000,
+    MaxCost: 100,
+    BufferItems: 64,
+})
 if err != nil {
     panic(err)
 }
@@ -202,43 +451,62 @@ if err != nil {
 redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
 
 // Initialize stores
-ristrettoStore := store.NewRistretto(ristrettoCache, nil)
-redisStore := store.NewRedis(redisClient, &store.Options{Expiration: 5*time.Second})
+ristrettoStore := ristretto_store.NewRistretto(ristrettoCache)
+redisStore := redis_store.NewRedis(redisClient, store.WithExpiration(5*time.Second))
 
 // Initialize chained cache
-cacheManager := cache.NewChain(
-    cache.New(ristrettoStore),
-    cache.New(redisStore),
+cacheManager := cache.NewChain[any](
+    cache.New[any](ristrettoStore),
+    cache.New[any](redisStore),
 )
+defer cacheManager.Close()
 
 // ... Then, do what you want with your cache
 ```
 
 `Chain` cache also put data back in previous caches when it's found so in this case, if ristretto doesn't have the data in its cache but redis have, data will also get setted back into ristretto (memory) cache.
 
+This is done in the background, which is why a `Chain` cache owns a goroutine: call `Close()` when you don't need it anymore to release it and set the values that are still pending. If your chain lives for the whole lifetime of your process, you don't have to bother.
+
 ### A loadable cache
 
 This cache will provide a load function that acts as a callable function and will set your data back in your cache in case they are not available:
 
 ```go
+type Book struct {
+	ID   string
+	Name string
+}
+
 // Initialize Redis client and store
 redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
-redisStore := store.NewRedis(redisClient, nil)
+redisStore := redis_store.NewRedis(redisClient)
 
-// Initialize a load function that loads your data from a custom source
-loadFunction := func(ctx context.Context, key interface{}) (interface{}, error) {
+// Initialize a load function that loads your data from a custom source.
+// It returns the value, the options to store it with, and an error.
+loadFunction := func(ctx context.Context, key any) ([]byte, []store.Option, error) {
     // ... retrieve value from available source
-    return &Book{ID: 1, Name: "My test amazing book", Slug: "my-test-amazing-book"}, nil
+    book := &Book{ID: "1", Name: "My test amazing book"}
+
+    value, err := msgpack.Marshal(book)
+
+    return value, []store.Option{store.WithExpiration(1 * time.Hour)}, err
 }
 
 // Initialize loadable cache
-cacheManager := cache.NewLoadable(
+cacheManager := cache.NewLoadable[[]byte](
 	loadFunction,
-	cache.New(redisStore),
+	cache.New[[]byte](redisStore),
 )
+defer cacheManager.Close()
 
 // ... Then, you can get your data and your function will automatically put them in cache(s)
 ```
+
+Note that the cache type has to be one the store actually handles: Redis cannot store a `*Book` as is, hence
+the marshaling above. Have a look at [the table of what each store supports](#what-each-store-supports).
+
+As for the `Chain` cache, loaded values are stored in the cache in the background: call `Close()` when you don't need the cache anymore to release the goroutine that does it and store the values that are still pending.
 
 Of course, you can also pass a `Chain` cache into the `Loadable` one so if your data is not available in all caches, it will bring it back in all caches.
 
@@ -249,15 +517,15 @@ This cache will record metrics depending on the metric provider you pass to it. 
 ```go
 // Initialize Redis client and store
 redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
-redisStore := store.NewRedis(redisClient, nil)
+redisStore := redis_store.NewRedis(redisClient)
 
 // Initializes Prometheus metrics service
 promMetrics := metrics.NewPrometheus("my-test-app")
 
 // Initialize metric cache
-cacheManager := cache.NewMetric(
+cacheManager := cache.NewMetric[any](
 	promMetrics,
-	cache.New(redisStore),
+	cache.New[any](redisStore),
 )
 
 // ... Then, you can get your data and metrics will be observed by Prometheus
@@ -270,12 +538,12 @@ Some caches like Redis stores and returns the value as a string so you have to m
 ```go
 // Initialize Redis client and store
 redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
-redisStore := store.NewRedis(redisClient, nil)
+redisStore := redis_store.NewRedis(redisClient)
 
 // Initialize chained cache
-cacheManager := cache.NewMetric(
+cacheManager := cache.NewMetric[any](
 	promMetrics,
-	cache.New(redisStore),
+	cache.New[any](redisStore),
 )
 
 // Initializes marshaler
@@ -301,6 +569,70 @@ marshal.Delete(ctx, "my-key")
 
 The only thing you have to do is to specify the struct in which you want your value to be un-marshalled as a second argument when calling the `.Get()` method.
 
+#### A marshaler cache
+
+`marshaler.Marshaler` fills an object given to `Get()`, which means it is not a `cache.CacheInterface` and
+cannot be composed with the other caches. `marshaler.Cache` is the same idea with a `Get()` that returns the
+value, so it satisfies `cache.CacheInterface[T]` and can be wrapped like any other cache — a loadable cache
+over a chain of stores that only handle bytes, for instance:
+
+```go
+// A chain of caches holding bytes
+chain := cache.NewChain[[]byte](
+	cache.New[[]byte](ristrettoStore),
+	cache.New[[]byte](redisStore),
+)
+defer chain.Close()
+
+// ... seen as a cache of *Book
+books := marshaler.NewCache[*Book](chain)
+
+// ... which can be given a load function
+cacheManager := cache.NewLoadable[*Book](loadFunction, books)
+defer cacheManager.Close()
+
+book, err := cacheManager.Get(ctx, "my-key")
+if err != nil {
+    panic(err)
+}
+```
+
+It takes a `cache.CacheInterface[[]byte]`, so put the metric cache below it rather than above it, otherwise
+there is no codec to read the statistics from:
+
+```go
+books := marshaler.NewCache[*Book](cache.NewMetric[[]byte](promMetrics, cache.New[[]byte](redisStore)))
+```
+
+### Setting a value only if the key is free
+
+`SetIfNotExists()` writes a value only when the key does not exist yet and reports whether it did, using the
+atomic primitive of the underlying store (`SETNX` for Redis, `add` for Memcache and Go-cache,
+`Create` for NATS JetStream KV). It is the
+building block for idempotent writes and simple distributed locks, which `Get()` followed by `Set()` cannot
+give you:
+
+```go
+set, err := cacheManager.SetIfNotExists(ctx, "my-lock", "owner-id", store.WithExpiration(30*time.Second))
+if err != nil {
+    panic(err)
+}
+
+if !set {
+    // someone else owns the lock
+}
+```
+
+Stores that have no such primitive return an error wrapping `store.ErrNotSupported`, so it can be told apart
+from a real failure:
+
+```go
+if errors.Is(err, store.ErrNotSupported) {
+    // this store cannot do it atomically
+}
+```
+
+See [the table above](#what-each-store-supports) for the stores that implement it.
 
 ### Cache invalidation using tags
 
@@ -308,33 +640,42 @@ You can attach some tags to items you create so you can easily invalidate some o
 
 Tags are stored using the same storage you choose for your cache.
 
+> [!WARNING]
+> A tag is stored as its own entry listing the tagged keys, separate from the items themselves. When a store
+> evicts entries to free memory (Redis or Valkey with an `allkeys-*` or `volatile-*` `maxmemory-policy`,
+> Memcache, Bigcache, Freecache, Ristretto, ...), it can drop a tag entry while the items it references are
+> still cached. Invalidating that tag then removes nothing, and those items stay until they expire.
+>
+> If tag invalidation must be reliable, give the store enough memory headroom, or use the `noeviction` policy
+> on Redis and Valkey, and keep an expiration on tagged items so a lost tag only delays their removal.
+
 Here is an example on how to use it:
 
 ```go
 // Initialize Redis client and store
 redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
-redisStore := store.NewRedis(redisClient, nil)
+redisStore := redis_store.NewRedis(redisClient)
 
 // Initialize chained cache
-cacheManager := cache.NewMetric(
+cacheManager := cache.NewMetric[*Book](
 	promMetrics,
-	cache.New(redisStore),
+	cache.New[*Book](redisStore),
 )
 
 // Initializes marshaler
 marshal := marshaler.New(cacheManager)
 
 key := BookQuery{Slug: "my-test-amazing-book"}
-value := Book{ID: 1, Name: "My test amazing book", Slug: "my-test-amazing-book"}
+value := &Book{ID: 1, Name: "My test amazing book", Slug: "my-test-amazing-book"}
 
 // Set an item in the cache and attach it a "book" tag
-err = marshal.Set(ctx, key, value, store.Options{Tags: []string{"book"}})
+err = marshal.Set(ctx, key, value, store.WithTags([]string{"book"}))
 if err != nil {
     panic(err)
 }
 
 // Remove all items that have the "book" tag
-err := marshal.Invalidate(ctx, store.InvalidateOptions{Tags: []string{"book"}})
+err := marshal.Invalidate(ctx, store.WithInvalidateTags([]string{"book"}))
 if err != nil {
     panic(err)
 }
@@ -346,18 +687,92 @@ if err != nil {
 }
 ```
 
-Mix this with expiration times on your caches to have a fine tuned control on how your data are cached.
+Mix this with expiration times on your caches to have a fine-tuned control on how your data are cached.
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/eko/gocache/lib/v4/cache"
+	"github.com/eko/gocache/lib/v4/store"
+	"github.com/redis/go-redis/v9"
+)
+
+func main() {
+	redisStore := redis_store.NewRedis(redis.NewClient(&redis.Options{
+		Addr: "127.0.0.1:6379",
+	}), nil)
+
+	cacheManager := cache.New[string](redisStore)
+	err := cacheManager.Set(ctx, "my-key", "my-value", store.WithExpiration(15*time.Second))
+	if err != nil {
+		panic(err)
+	}
+
+	key := "my-key"
+	value, err := cacheManager.Get(ctx, key)
+	if err != nil {
+		log.Fatalf("unable to get cache key '%s' from the cache: %v", key, err)
+	}
+
+	fmt.Printf("%#+v\n", value)
+}
+
+```
+
+### Value types
+
+A cache is instantiated with the type of the values it holds (`cache.New[*Book](...)`), but stores do not
+all keep the type they are given: Bigcache and Freecache only handle `[]byte`, Redis returns `string`, ...
+
+Both representations are converted for you when the cache type is `string` or `[]byte`, so
+`cache.New[string](bigcacheStore)` and `cache.New[[]byte](redisStore)` both return the value that was stored.
+Any other mismatch returns a `cache.ErrValueTypeMismatch` error instead of silently returning a zero value:
+
+```go
+value, err := cacheManager.Get(ctx, "my-key")
+if errors.Is(err, cache.ErrValueTypeMismatch) {
+    // the store does not hold the type this cache was instantiated with
+}
+```
+
+To store structs in a store that only handles bytes, use the [marshaler wrapper](#a-marshaler-wrapper).
+
+### Expiration
+
+The expiration is given by the `store.WithExpiration()` option, either as a store default or per `Set()` call.
+
+How to store a value that never expires depends on the underlying store:
+
+* most of them (Redis, Rueidis, Valkey, Memcache, Ristretto, Freecache, ...) treat a zero expiration as
+  "no expiration", which is the default when the option is not given,
+* the Go-cache store forwards a zero expiration to the client, which then applies its own default expiration:
+  pass `store.WithExpiration(gocache.NoExpiration)` (which is `-1`) instead,
+* Bigcache does not handle a per-key lifetime at all, it is configured on the client itself.
+
+### Releasing resources
+
+Some caches and stores own goroutines or connections that have to be released when they are not used anymore:
+
+* `cache.Cache` exposes a `Close()` method that closes the underlying store when it supports it (Ristretto,
+  Bigcache, ...),
+* `cache.ChainCache` and `cache.LoadableCache` own a goroutine each: their `Close()` method releases it after
+  having written the values that were still pending.
 
 ### Write your own custom cache
 
 Cache respect the following interface so you can write your own (proprietary?) cache logic if needed by implementing the following interface:
 
 ```go
-type CacheInterface interface {
-	Get(ctx context.Context, key interface{}) (interface{}, error)
-	Set(ctx context.Context, key, object interface{}, options *store.Options) error
-	Delete(ctx context.Context, key interface{}) error
-	Invalidate(ctx context.Context, options store.InvalidateOptions) error
+type CacheInterface[T any] interface {
+	Get(ctx context.Context, key any) (T, error)
+	Set(ctx context.Context, key any, object T, options ...store.Option) error
+	Delete(ctx context.Context, key any) error
+	Invalidate(ctx context.Context, options ...store.InvalidateOption) error
 	Clear(ctx context.Context) error
 	GetType() string
 }
@@ -366,9 +781,9 @@ type CacheInterface interface {
 Or, in case you use a setter cache, also implement the `GetCodec()` method:
 
 ```go
-type SetterCacheInterface interface {
-	CacheInterface
-	GetWithTTL(ctx context.Context, key interface{}) (interface{}, time.Duration, error)
+type SetterCacheInterface[T any] interface {
+	CacheInterface[T]
+	GetWithTTL(ctx context.Context, key any) (T, time.Duration, error)
 
 	GetCodec() codec.CodecInterface
 }
@@ -382,11 +797,11 @@ You also have the ability to write your own custom store by implementing the fol
 
 ```go
 type StoreInterface interface {
-	Get(ctx context.Context, key interface{}) (interface{}, error)
-	GetWithTTL(ctx context.Context, key interface{}) (interface{}, time.Duration, error)
-	Set(ctx context.Context, key interface{}, value interface{}, options *Options) error
-	Delete(ctx context.Context, key interface{}) error
-	Invalidate(ctx context.Context, options InvalidateOptions) error
+	Get(ctx context.Context, key any) (any, error)
+	GetWithTTL(ctx context.Context, key any) (any, time.Duration, error)
+	Set(ctx context.Context, key any, value any, options ...Option) error
+	Delete(ctx context.Context, key any) error
+	Invalidate(ctx context.Context, options ...InvalidateOption) error
 	Clear(ctx context.Context) error
 	GetType() string
 }
@@ -406,17 +821,13 @@ type CacheKeyGenerator interface {
 
 ### Benchmarks
 
-![Benchmarks](https://raw.githubusercontent.com/eko/gocache/master/misc/benchmarks.jpeg)
-
-## Community
-
-Please feel free to contribute on this library and do not hesitate to open an issue if you want to discuss about a feature.
+![Benchmarks](https://raw.githubusercontent.com/eko/gocache/master/lib/misc/benchmarks.jpeg)
 
 ## Run tests
 
-Generate mocks:
+To generate mocks using mockgen library, run:
+
 ```bash
-$ go get github.com/golang/mock/mockgen
 $ make mocks
 ```
 
@@ -424,5 +835,8 @@ Test suite can be run with:
 
 ```bash
 $ make test # run unit test
-$ make benchmark-store # run benchmark test
 ```
+
+## Community
+
+Please feel free to contribute on this library and do not hesitate to open an issue if you want to discuss about a feature.
